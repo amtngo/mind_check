@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mind_check</title>
+
+<style>
+body { font-family: Arial; max-width: 500px; margin:auto; padding:20px;}
+.option { padding:10px; border:1px solid #ddd; margin:8px 0; border-radius:8px; cursor:pointer;}
+.option:hover { background:#f5f5f5;}
+#result { display:none; margin-top:20px;}
+</style>
+</head>
+
+<body>
+
+<h2 id="title"></h2>
+<div id="quiz"></div>
+
+<div id="result">
+<div id="resultText"></div>
+</div>
+
+<script src="questions.js"></script>
+
+<script>
+
+// 🔥 본인 Supabase 정보 입력
+const SUPABASE_URL = "https://ejaibogjqrtfhfnutvdd.supabase.co";
+const API_KEY = "sb_publishable_W8EKcWJtoqceQA05o7gZdA_GgSFMtHw";
+
+const questions = getQuestionSet();
+
+let current = 0;
+let scores = [0,0,0,0];
+
+function showQuestion() {
+  const q = questions[current];
+  document.getElementById("title").innerText = q.question;
+
+  const quiz = document.getElementById("quiz");
+  quiz.innerHTML = "";
+
+  q.options.forEach(opt => {
+    const div = document.createElement("div");
+    div.className = "option";
+    div.innerText = opt.text;
+    div.onclick = () => selectOption(opt.score);
+    quiz.appendChild(div);
+  });
+}
+
+function selectOption(score) {
+  const group = Math.floor(current / 3);
+  scores[group] += score;
+
+  current++;
+
+  if (current < questions.length) {
+    showQuestion();
+  } else {
+    showResult();
+  }
+}
+
+function getGrade(score) {
+  if (score <= 2) return "A";
+  if (score <= 5) return "B";
+  return "C";
+}
+
+// 🔥 결과 + DB 저장
+async function showResult() {
+
+  document.getElementById("quiz").style.display = "none";
+  document.getElementById("title").innerText = "";
+
+  // 🔥 URL에서 code 가져오기
+  const code = new URLSearchParams(location.search).get("code");
+
+  // 🔥 answers 데이터
+  const answers = { scores };
+
+  try {
+    await fetch(SUPABASE_URL + "/rest/v1/responses", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": API_KEY,
+        "Authorization": "Bearer " + API_KEY
+      },
+      body: JSON.stringify({
+        code: code,
+        answers: answers
+      })
+    });
+
+    console.log("DB 저장 성공");
+
+  } catch (e) {
+    console.error("DB 저장 실패", e);
+  }
+
+  const resultText = `
+  응답이 정상적으로 접수되었습니다.<br><br>
+  작성해주신 내용은 상담사가 직접 확인하며,<br>
+  확인 후 순차적으로 연락드릴 예정입니다.
+  `;
+
+  document.getElementById("resultText").innerHTML = resultText;
+  document.getElementById("result").style.display = "block";
+}
+
+showQuestion();
+
+</script>
+
+</body>
+</html>
