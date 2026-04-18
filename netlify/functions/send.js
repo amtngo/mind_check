@@ -1,19 +1,10 @@
 const { Resend } = require("resend");
 
 exports.handler = async function(event) {
-
-  // ✔ GET 요청 방어 (브라우저 직접 접근 시 에러 방지)
-  if (!event.body) {
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: "No body (GET test ok)" })
-    };
-  }
-
   try {
     const { code, answers } = JSON.parse(event.body);
 
-    // ✔ 코드 조회
+    // 1. 코드 조회
     const res = await fetch(`${process.env.SUPABASE_URL}/rest/v1/codes?code=eq.${code}`, {
       headers: {
         apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -39,24 +30,26 @@ exports.handler = async function(event) {
 
     const email = data[0].email;
 
-    // ✔ 메일 발송
+    // 2. 메일 발송
     const resend = new Resend(process.env.RESEND_API_KEY);
 
     const result = await resend.emails.send({
-      from: "onboarding@resend.dev",
+      from: "MindCheck <onboarding@resend.dev>", // ⚠️ 여기 중요
       to: email,
       subject: "상담 결과",
       html: `
-        <h2>응답 결과</h2>
+        <h2>상담 결과</h2>
+        <p>코드: ${code}</p>
         <pre>${JSON.stringify(answers, null, 2)}</pre>
       `
     });
 
     if (!result || result.error) {
+      console.error("메일 실패:", result);
       throw new Error("메일 전송 실패");
     }
 
-    // ✔ 코드 사용 처리
+    // 3. 코드 사용 처리
     await fetch(`${process.env.SUPABASE_URL}/rest/v1/codes?code=eq.${code}`, {
       method: "PATCH",
       headers: {
@@ -73,6 +66,8 @@ exports.handler = async function(event) {
     };
 
   } catch (err) {
+    console.error("에러:", err);
+
     return {
       statusCode: 500,
       body: JSON.stringify({ error: err.message })
