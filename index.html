@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>초기 상태 분석</title>
+
+<script src="questions.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+</head>
+
+<body>
+
+<h2 id="q"></h2>
+<div id="opts"></div>
+
+<script>
+
+// supabase
+var supabase = window.supabase.createClient(
+  "https://iuilyyyzgnzydbvffwrg.supabase.co",
+   "sb_publishable_dujoVOiKC1z4FlXIk70hjA_ZR0m1s75"   // ⚠️ 반드시 본인 키로 교체
+);
+
+// URL code
+var params = new URLSearchParams(location.search);
+var code = params.get("code");
+
+// 질문
+var questions = getQuestionSet();
+
+var index = 0;
+var answers = [];
+
+// 질문 출력
+function render(){
+
+  if(!questions[index]){
+    console.error("질문 없음");
+    return;
+  }
+
+  var q = questions[index];
+
+  document.getElementById("q").innerText = q.question;
+
+  var box = document.getElementById("opts");
+  box.innerHTML = "";
+
+  for(var i=0;i<q.options.length;i++){
+
+    var btn = document.createElement("button");
+    btn.innerText = q.options[i].text;
+
+    btn.onclick = (function(opt){
+      return function(){ select(opt); }
+    })(q.options[i]);
+
+    box.appendChild(btn);
+  }
+}
+
+// 선택
+function select(opt){
+
+  answers.push({
+    selected: opt.text,
+    score: opt.score
+  });
+
+  index++;
+
+  if(index < questions.length){
+    render();
+  } else {
+    submit();
+  }
+}
+
+// 제출
+async function submit(){
+
+  var payload = {
+    code: code,
+    answers: answers
+  };
+
+  try {
+
+    // 1. DB 저장
+    const { error: dbError } = await supabase
+      .from("responses")
+      .insert([payload]);
+
+    if (dbError) {
+      console.error("DB 오류:", dbError);
+    }
+
+    // 🔥 2. Edge Function (핵심 수정)
+    const { data, error } = await supabase.functions.invoke("submit-survey", {
+      body: payload   // ❗ JSON.stringify 절대 쓰지 않음
+    });
+
+    if (error) {
+      console.error("함수 오류:", error);
+    }
+
+    document.body.innerHTML = "접수가 완료되었습니다.";
+
+  } catch(e){
+    console.error("전체 오류:", e);
+    document.body.innerHTML = "오류가 발생했습니다.";
+  }
+}
+
+// 시작
+render();
+
+</script>
+
+</body>
+</html>
