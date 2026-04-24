@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>초기 상태 분석</title>
+
+<script src="questions.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+</head>
+
+<body>
+
+<h2 id="q"></h2>
+<div id="opts"></div>
+
+<script>
+
+var supabase = window.supabase.createClient(
+  "https://iuilyyyzgnzydbvffwrg.supabase.co",
+  "sb_publishable_dujoVOiKC1z4FlXIk70hjA_ZR0m1s75"
+);
+
+var params = new URLSearchParams(location.search);
+var code = params.get("code");
+
+var questions = getQuestionSet();
+
+var index = 0;
+var answers = [];
+
+function render(){
+
+  var q = questions[index];
+
+  document.getElementById("q").innerText = q.question;
+
+  var box = document.getElementById("opts");
+  box.innerHTML = "";
+
+  for(var i=0;i<q.options.length;i++){
+
+    var btn = document.createElement("button");
+    btn.innerText = q.options[i].text;
+
+    btn.onclick = (function(opt){
+      return function(){ select(opt); }
+    })(q.options[i]);
+
+    box.appendChild(btn);
+  }
+}
+
+function select(opt){
+
+  answers.push({
+    selected: opt.text,
+    score: opt.score
+  });
+
+  index++;
+
+  if(index < questions.length){
+    render();
+  } else {
+    submit();
+  }
+}
+
+async function submit(){
+
+  var payload = {
+    code: code,
+    answers: answers
+  };
+
+  await supabase.from("responses").insert([payload]);
+
+  await supabase.functions.invoke("submit-survey", {
+    body: payload
+  });
+
+  document.body.innerHTML = "접수 완료";
+}
+
+render();
+
+</script>
+
+</body>
+</html>
