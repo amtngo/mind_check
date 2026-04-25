@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>초기 상태 분석</title>
+
+<script src="questions.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f5f5f5;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+/* 카드 */
+.container {
+  width: 90%;
+  max-width: 420px;
+  background: #fff;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  text-align: center;
+}
+
+/* 질문 */
+#q {
+  font-size: 18px;
+  margin-bottom: 20px;
+  white-space: pre-line; /* 줄바꿈 적용 */
+}
+
+/* 보기 영역 */
+#opts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 버튼 */
+button {
+  padding: 14px;
+  border: none;
+  border-radius: 8px;
+  background: #f0f0f0;
+  font-size: 14px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+button:hover {
+  background: #e0e0e0;
+}
+
+button:active {
+  background: #d0d0d0;
+}
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+  <h2 id="q"></h2>
+  <div id="opts"></div>
+</div>
+
+<script>
+
+// supabase
+var supabase = window.supabase.createClient(
+  "https://iuilyyyzgnzydbvffwrg.supabase.co",
+  "sb_publishable_dujoVOiKC1z4FlXIk70hjA_ZR0m1s75" // 반드시 교체
+);
+
+// code
+var params = new URLSearchParams(location.search);
+var code = params.get("code");
+
+// 질문
+var questions = getQuestionSet();
+
+var index = 0;
+var answers = [];
+
+// 렌더
+function render(){
+
+  if(!questions[index]){
+    console.error("질문 없음");
+    return;
+  }
+
+  var q = questions[index];
+
+  // 🔥 마지막 문항 표시
+  var questionText = q.question;
+
+  if(index === questions.length - 1){
+    questionText = "마지막 질문입니다.\n\n" + q.question;
+  }
+
+  document.getElementById("q").innerText = questionText;
+
+  var box = document.getElementById("opts");
+  box.innerHTML = "";
+
+  for(var i=0;i<q.options.length;i++){
+
+    var btn = document.createElement("button");
+    btn.innerText = q.options[i].text;
+
+    btn.onclick = (function(opt){
+      return function(){ select(opt); }
+    })(q.options[i]);
+
+    box.appendChild(btn);
+  }
+}
+
+// 선택
+function select(opt){
+
+  answers.push({
+    selected: opt.text,
+    score: opt.score
+  });
+
+  index++;
+
+  if(index < questions.length){
+    render();
+  } else {
+    submit();
+  }
+}
+
+// 제출
+async function submit(){
+
+  var payload = {
+    code: code,
+    answers: answers
+  };
+
+  try {
+
+    // DB 저장
+    const { error: dbError } = await supabase
+      .from("responses")
+      .insert([payload]);
+
+    if (dbError) {
+      console.error("DB 오류:", dbError);
+    }
+
+    // Edge Function
+    const { error } = await supabase.functions.invoke("submit-survey", {
+      body: payload
+    });
+
+    if (error) {
+      console.error("함수 오류:", error);
+    }
+
+    document.body.innerHTML = `
+      <div style="text-align:center;padding:40px;">
+        <h2>접수가 완료되었습니다.</h2>
+        <p>상담사가 확인 후 안내드립니다.</p>
+      </div>
+    `;
+
+  } catch(e){
+    console.error("전체 오류:", e);
+    document.body.innerHTML = "오류가 발생했습니다.";
+  }
+}
+
+// 시작
+render();
+
+</script>
+
+</body>
+</html>
