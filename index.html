@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>초기 상태 분석</title>
+
+<script src="questions.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+body {
+  margin:0;
+  font-family:Arial;
+  background:#f5f5f5;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+}
+.container {
+  width:90%;
+  max-width:420px;
+  background:#fff;
+  padding:20px;
+  border-radius:12px;
+  box-shadow:0 4px 12px rgba(0,0,0,0.1);
+}
+#q { font-size:18px; margin-bottom:20px; white-space:pre-line; }
+#opts { display:flex; flex-direction:column; gap:10px; }
+button {
+  padding:14px;
+  border:none;
+  border-radius:8px;
+  background:#eee;
+  cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+  <h3 id="q">로딩 중...</h3>
+  <div id="opts"></div>
+</div>
+
+<script>
+
+// ✔ Supabase (1번만!)
+const supabase = window.supabase.createClient(
+  "https://iuilyyyzgnzydbvffwrg.supabase.co",
+  "sb_publishable_dujoVOiKC1z4FlXIk70hjA_ZR0m1s75"
+);
+
+// 코드
+const params = new URLSearchParams(location.search);
+const code = params.get("code");
+
+// ✔ 질문 불러오기 (핵심 수정)
+function loadQuestions(){
+  if (typeof getQuestionSet === "function") {
+    return getQuestionSet();
+  }
+  if (typeof questionSets !== "undefined") {
+    return questionSets.A;
+  }
+  return [];
+}
+
+const questions = loadQuestions();
+
+let index = 0;
+let answers = [];
+
+// ✔ 렌더
+function render(){
+  const q = questions[index];
+
+  if(!q){
+    document.getElementById("q").innerText = "문항을 불러오지 못했습니다.";
+    return;
+  }
+
+  let text = q.question;
+  if(index === questions.length - 1){
+    text = "마지막 질문입니다\n\n" + text;
+  }
+
+  document.getElementById("q").innerText = text;
+
+  const box = document.getElementById("opts");
+  box.innerHTML = "";
+
+  q.options.forEach(opt => {
+    const btn = document.createElement("button");
+    btn.innerText = opt.text;
+    btn.onclick = () => select(opt);
+    box.appendChild(btn);
+  });
+}
+
+// ✔ 선택
+function select(opt){
+  answers.push(opt.text);
+  index++;
+
+  if(index < questions.length){
+    render();
+  } else {
+    submit();
+  }
+}
+
+// ✔ 전송
+async function submit(){
+
+  document.body.innerHTML = "<h2 style='text-align:center;'>전송 중...</h2>";
+
+  try {
+    await fetch(
+      "https://iuilyyyzgnzydbvffwrg.supabase.co/functions/v1/submit-survey",
+      {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ code, answers })
+      }
+    );
+
+    document.body.innerHTML = `
+      <div style="text-align:center;padding:40px;">
+        <h2>접수가 완료되었습니다.</h2>
+        <p>상담사가 확인 후 안내드립니다.</p>
+      </div>
+    `;
+
+  } catch(e){
+    document.body.innerHTML = `
+      <div style="text-align:center;padding:40px;">
+        <h2>오류 발생</h2>
+        <p>다시 시도해주세요</p>
+      </div>
+    `;
+    console.error(e);
+  }
+}
+
+// ✔ 실행
+render();
+
+</script>
+
+</body>
+</html>
