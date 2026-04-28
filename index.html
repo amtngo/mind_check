@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>초기 상태 확인</title>
+
+<script src="questions.js?v=9"></script>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f5f5f5;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+.container {
+  width: 90%;
+  max-width: 420px;
+  background: #fff;
+  padding: 22px;
+  border-radius: 12px;
+  text-align: center;
+}
+
+#progress {
+  font-size: 14px;
+  color: #777;
+  margin-bottom: 12px;
+}
+
+#q {
+  font-size: 18px;
+  line-height: 1.5;
+  margin-bottom: 22px;
+  white-space: pre-line;
+}
+
+#opts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+button {
+  width: 100%;
+  padding: 15px;
+  border: none;
+  border-radius: 8px;
+  background: #eeeeee;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+button:active {
+  background: #dddddd;
+}
+
+button:disabled {
+  opacity: 0.6;
+}
+
+.message h2 {
+  font-size: 22px;
+}
+
+.message p {
+  font-size: 17px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container" id="app">
+  <div id="progress"></div>
+  <h3 id="q">로딩 중...</h3>
+  <div id="opts"></div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const code = params.get("code");
+const type = params.get("type") || "A";
+
+let questions = [];
+let index = 0;
+let answers = [];
+let locked = false;
+
+function showMessage(title, text) {
+  document.getElementById("app").innerHTML = `
+    <div class="message">
+      <h2>${title}</h2>
+      <p>${text}</p>
+    </div>
+  `;
+}
+
+function loadQuestions() {
+  if (window.getQuestionSet) return window.getQuestionSet(type);
+  if (window.questionSets?.[type]) return window.questionSets[type];
+  if (window.questionSets?.A) return window.questionSets.A;
+  return [];
+}
+
+function render() {
+  locked = false;
+
+  const q = questions[index];
+  if (!q) {
+    showMessage("문항 오류", "문항을 불러오지 못했습니다.");
+    return;
+  }
+
+  document.getElementById("progress").innerText =
+    `${index + 1} / ${questions.length}`;
+
+  let text = q.question;
+  if (index === questions.length - 1) {
+    text = "마지막 질문입니다\n\n" + text;
+  }
+
+  document.getElementById("q").innerText = text;
+
+  const box = document.getElementById("opts");
+  box.innerHTML = "";
+
+  q.options.forEach((opt) => {
+    const btn = document.createElement("button");
+    btn.innerText = opt.text;
+
+    btn.onclick = () => select(opt);
+
+    box.appendChild(btn);
+  });
+}
+
+function select(opt) {
+  if (locked) return;
+  locked = true;
+
+  document.querySelectorAll("button").forEach(b => b.disabled = true);
+
+  // ✔ 핵심: value를 보내야 분석 가능
+  answers.push({
+    question: questions[index].id || `Q${index + 1}`,
+    selected: opt.value
+  });
+
+  index++;
+
+  if (index < questions.length) {
+    setTimeout(render, 200);
+  } else {
+    submit();
+  }
+}
+
+async function submit() {
+  showMessage("전송 중...", "응답을 접수하고 있습니다.");
+
+  try {
+    const res = await fetch(
+      "https://iuilyyyzgnzydbvffwrg.supabase.co/functions/v1/submit-survey",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, type, answers })
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      throw new Error("전송 실패");
+    }
+
+    showMessage(
+      "접수가 완료되었습니다.",
+      "상담사가 확인 후 연락드립니다."
+    );
+
+  } catch (e) {
+    console.error("전송 실패:", e);
+
+    showMessage(
+      "일시적인 오류",
+      "잠시 후 다시 시도해주세요."
+    );
+  }
+}
+
+window.onload = () => {
+  if (!code) {
+    showMessage(
+      "유효하지 않은 접근입니다.",
+      "상담사가 전달한 링크를 그대로 눌러주세요."
+    );
+    return;
+  }
+
+  questions = loadQuestions();
+
+  if (!questions.length) {
+    showMessage("문항 없음", "설문을 불러오지 못했습니다.");
+    return;
+  }
+
+  render();
+};
+</script>
+
+</body>
+</html>
