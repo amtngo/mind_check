@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>내담자 초기 상태 분석</title>
+
+<style>
+body {
+  font-family: sans-serif;
+  background: #f7f7f7;
+  margin: 0;
+  padding: 20px;
+}
+
+.container {
+  max-width: 500px;
+  margin: auto;
+}
+
+.card {
+  background: #fff;
+  padding: 20px;
+  border-radius: 10px;
+}
+
+h2 {
+  font-size: 18px;
+  margin-bottom: 20px;
+}
+
+.option {
+  display: block;
+  width: 100%;
+  margin: 10px 0;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  background: #fafafa;
+  cursor: pointer;
+}
+
+.option:hover { background: #eee; }
+.option:active { background: #ddd; }
+
+.result {
+  text-align: center;
+  margin-top: 50px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+  <div id="app" class="card"></div>
+</div>
+
+<script src="questions.js"></script>
+
+<script>
+
+// =========================
+// 1. 코드 확인
+// =========================
+const urlParams = new URLSearchParams(window.location.search);
+const code = urlParams.get("code")?.trim();
+
+const app = document.getElementById("app");
+
+if (!code) {
+  app.innerHTML = "<p>유효한 코드가 없습니다</p>";
+  throw new Error("code 없음");
+}
+
+// =========================
+// 2. 데이터 준비
+// =========================
+const questions = window.getQuestionSet();
+
+let current = 0;
+let answers = [];
+let locked = false;
+
+// =========================
+// 3. 질문 출력
+// =========================
+function renderQuestion() {
+  const q = questions[current];
+
+  app.innerHTML = `
+    <h2>${q.question}</h2>
+    ${q.options.map((opt, i) => `
+      <button class="option" onclick="selectOption(${i})">
+        ${opt.text}
+      </button>
+    `).join("")}
+  `;
+}
+
+// =========================
+// 4. 선택 처리
+// =========================
+function selectOption(index) {
+
+  if (locked) return;
+  locked = true;
+
+  console.log("선택:", index);
+
+  answers.push({
+    question: "Q" + (current + 1),
+    selected: index
+  });
+
+  current++;
+
+  setTimeout(() => {
+    locked = false;
+
+    if (current < questions.length) {
+      renderQuestion();
+    } else {
+      submit();
+    }
+  }, 150);
+}
+
+// =========================
+// 5. 전송 (안정화 버전)
+// =========================
+async function submit() {
+
+  console.log("최종 answers:", answers);
+
+  app.innerHTML = `<p>전송 중...</p>`;
+
+  try {
+    const res = await fetch("https://iuilyyyzgnzydbvffwrg.supabase.co/functions/v1/submit-survey", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        code: code,
+        answers: answers
+      })
+    });
+
+    let data = {};
+
+    try {
+      data = await res.json(); // 🔥 JSON 실패해도 무시
+    } catch (e) {
+      console.log("JSON 파싱 실패 (무시)");
+    }
+
+    console.log("응답:", data);
+
+    if (!res.ok) {
+      throw new Error(data.error || "전송 실패");
+    }
+
+    // ✅ 성공 처리
+    app.innerHTML = `
+      <div class="result">
+        <h3>접수가 완료되었습니다.</h3>
+        <p>상담사가 확인 후 연락드립니다.</p>
+      </div>
+    `;
+
+  } catch (err) {
+
+    console.log("에러:", err);
+
+    app.innerHTML = `
+      <div class="result">
+        <h3>오류 발생</h3>
+        <p>${err.message}</p>
+      </div>
+    `;
+  }
+}
+
+// =========================
+// 시작
+// =========================
+renderQuestion();
+
+</script>
+
+</body>
+</html>
